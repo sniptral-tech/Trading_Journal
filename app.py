@@ -46,6 +46,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 # ====================================================================
 # STYLISATION CSS SUR-MESURE (DESIGN PREMIUM DARK)
 # ====================================================================
@@ -62,6 +63,29 @@ st.markdown("""
     .stApp {
         background: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #0f172a 100%) !important;
         color: #f3f4f6 !important;
+    }
+
+    /* Barre supérieure Streamlit : transparente pour prolonger le dégradé
+       (sinon une bande blanche reste visible en haut de la page) */
+    [data-testid="stHeader"] {
+        background: transparent !important;
+    }
+
+    /* Titres et libellés : texte clair et lisible sur fond sombre.
+       Ciblé sur les conteneurs markdown/légendes/labels plutôt que sur
+       p/span/label en général, pour ne pas écraser le texte blanc des
+       boutons (qui vit dans son propre <p> à l'intérieur de <button>). */
+    h1, h2, h3, h4, h5, h6, label,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMetricLabel"],
+    [data-testid="stCaptionContainer"] {
+        color: #e5e7eb !important;
+    }
+
+    h1, h2, h3 {
+        font-weight: 800 !important;
+        letter-spacing: -0.4px !important;
     }
 
     /* Barre latérale (Sidebar) */
@@ -121,6 +145,36 @@ st.markdown("""
         box-shadow: 0 0 10px rgba(56, 189, 248, 0.3) !important;
     }
 
+    /* Conteneur des formulaires (st.form) : sans ça, un cadre gris clair
+       par défaut de Streamlit tranche mal avec le fond sombre */
+    [data-testid="stForm"] {
+        background: rgba(15, 23, 42, 0.45) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 18px !important;
+        padding: 22px !important;
+    }
+
+    /* Messages d'alerte (st.info / st.success / st.warning / st.error) */
+    [data-testid="stAlert"] {
+        background: rgba(17, 24, 39, 0.75) !important;
+        backdrop-filter: blur(8px) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* Tableaux (st.dataframe / st.data_editor) */
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+
+    /* Curseurs (st.slider) */
+    [data-testid="stSlider"] [role="slider"] {
+        background-color: #818cf8 !important;
+        box-shadow: 0 0 0 5px rgba(129, 140, 248, 0.2) !important;
+    }
+
     /* Onglets (Tabs) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px !important;
@@ -135,6 +189,7 @@ st.markdown("""
         color: #94a3b8 !important;
         font-weight: 600 !important;
         border: none !important;
+        transition: color 0.2s ease-in-out !important;
     }
 
     .stTabs [aria-selected="true"] {
@@ -142,6 +197,12 @@ st.markdown("""
         color: #38bdf8 !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
     }
+
+    /* Ascenseur (scrollbar) discret et assorti au thème */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,6 +221,8 @@ COLUMNS = [
     "Profit_Net",
     "Rendement_Pct",
 ]
+
+
 # ====================================================================
 # 2. PERSISTANCE CLOUD (Supabase)
 # ====================================================================
@@ -409,8 +472,15 @@ with tab_dashboard:
                 color_discrete_map={"Gain": "#22c55e", "Perte": "#ef4444"},
                 labels={"Profit_Net": "Profit net ($)"},
                 text_auto=".2f",
+                template="plotly_dark",
             )
-            fig_bar.update_layout(showlegend=False, margin=dict(t=10, b=10))
+            fig_bar.update_layout(
+                showlegend=False, margin=dict(t=10, b=10),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e5e7eb"),
+            )
+            fig_bar.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
+            fig_bar.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with g2:
@@ -423,8 +493,14 @@ with tab_dashboard:
                 color=["Gagnés", "Perdus"],
                 color_discrete_map={"Gagnés": "#22c55e", "Perdus": "#ef4444"},
                 hole=0.45,
+                template="plotly_dark",
             )
-            fig_pie.update_layout(margin=dict(t=10, b=10))
+            fig_pie.update_layout(
+                margin=dict(t=10, b=10),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e5e7eb"),
+                legend=dict(font=dict(color="#e5e7eb")),
+            )
             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.subheader("Progression du capital au fil des sessions")
@@ -434,12 +510,19 @@ with tab_dashboard:
         fig_line.add_trace(go.Scatter(
             x=df_line["Session"], y=df_line["Capital_Final"],
             mode="lines+markers", name="Capital final",
-            line=dict(color="#3b82f6", width=3),
+            line=dict(color="#38bdf8", width=3),
+            marker=dict(size=7, color="#818cf8", line=dict(width=1, color="#0b0f19")),
+            fill="tozeroy", fillcolor="rgba(56, 189, 248, 0.08)",
         ))
         fig_line.update_layout(
+            template="plotly_dark",
             xaxis_title="Session", yaxis_title="Capital ($)",
             margin=dict(t=10, b=10),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e5e7eb"),
         )
+        fig_line.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
+        fig_line.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
         st.plotly_chart(fig_line, use_container_width=True)
 
         st.divider()
@@ -680,8 +763,17 @@ with tab_sim:
             x=df_sim["Trade #"], y=df_sim["Capital après ($)"],
             mode="lines+markers", name="Capital",
             line=dict(color="#a855f7", width=3),
+            marker=dict(size=7, color="#c4b5fd", line=dict(width=1, color="#0b0f19")),
+            fill="tozeroy", fillcolor="rgba(168, 85, 247, 0.08)",
         ))
-        fig_sim.update_layout(xaxis_title="Trade #", yaxis_title="Capital ($)", margin=dict(t=10, b=10))
+        fig_sim.update_layout(
+            template="plotly_dark",
+            xaxis_title="Trade #", yaxis_title="Capital ($)", margin=dict(t=10, b=10),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e5e7eb"),
+        )
+        fig_sim.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
+        fig_sim.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
         st.plotly_chart(fig_sim, use_container_width=True)
 
         st.dataframe(df_sim, use_container_width=True, hide_index=True)
