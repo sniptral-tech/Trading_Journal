@@ -47,6 +47,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Chargement du fichier style.css
+with open("style.css", "r", encoding="utf-8") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
 # Colonnes de l'historique
 COLUMNS = [
     "ID",
