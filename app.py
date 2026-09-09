@@ -3,10 +3,8 @@
  CARNET DE TRADING INTERACTIF - Streamlit
 ====================================================================
 Application de suivi de sessions de trading (money management
-"4% évolutif"), avec sauvegarde persistante sur une base Supabase
-(Postgres gratuit) plutôt qu'un fichier local — les données
-survivent aux mises en veille et aux redéploiements de l'appli sur
-Streamlit Community Cloud.
+évolutif avec pourcentage de mise dynamique), avec sauvegarde persistante 
+sur une base Supabase (Postgres gratuit).
 
 Configuration requise avant lancement :
   - Un projet Supabase avec la table créée via supabase_setup.sql
@@ -19,9 +17,6 @@ Configuration requise avant lancement :
 Lancement :
     pip install -r requirements.txt
     streamlit run app.py
-
-Testé pour Streamlit >= 1.28 (utilise st.data_editor et
-st.column_config, disponibles à partir de cette version).
 ====================================================================
 """
 
@@ -45,9 +40,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Taux de mise fixe (4% du capital disponible avant chaque trade)
-MISE_PCT = 0.04
-
 # Colonnes de l'historique (ordre = ordre d'affichage dans le tableau)
 COLUMNS = [
     "ID",
@@ -68,14 +60,9 @@ COLUMNS = [
 # ====================================================================
 # 2. PERSISTANCE CLOUD (Supabase — base Postgres gratuite)
 # ====================================================================
-# Les données ne sont plus stockées dans un fichier local : elles sont
-# enregistrées dans une base Supabase pour survivre aux mises en veille
-# et aux redéploiements de l'appli sur Streamlit Community Cloud.
 
 SUPABASE_TABLE = "sessions"
 
-# Correspondance entre les noms de colonnes utilisés dans l'appli
-# (COLUMNS ci-dessus) et les noms de colonnes dans la table Postgres.
 COL_TO_DB = {
     "Date": "session_date",
     "Mode": "mode",
@@ -95,15 +82,14 @@ DB_TO_COL["id"] = "ID"
 
 @st.cache_resource
 def get_supabase_client() -> "Client":
-    """Crée le client Supabase une seule fois par session, à partir des
-    identifiants stockés dans les secrets Streamlit (jamais commités)."""
+    """Crée le client Supabase une seule fois par session."""
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
     return create_client(url, key)
 
 
 def load_history() -> pd.DataFrame:
-    """Charge l'historique complet depuis Supabase (source de vérité)."""
+    """Charge l'historique complet depuis Supabase."""
     try:
         client = get_supabase_client()
         response = client.table(SUPABASE_TABLE).select("*").order("id").execute()
@@ -121,8 +107,7 @@ def load_history() -> pd.DataFrame:
 
 
 def append_session(row: dict) -> None:
-    """Ajoute une session dans Supabase, puis rafraîchit l'historique local
-    (l'ID est généré automatiquement par la base, pas besoin de le gérer ici)."""
+    """Ajoute une session dans Supabase."""
     client = get_supabase_client()
     db_row = {COL_TO_DB[k]: v for k, v in row.items() if k in COL_TO_DB}
     client.table(SUPABASE_TABLE).insert(db_row).execute()
@@ -130,43 +115,32 @@ def append_session(row: dict) -> None:
 
 
 def reset_history() -> None:
-    """Supprime définitivement toutes les sessions enregistrées dans Supabase."""
+    """Supprime définitivement toutes les sessions enregistrées."""
     client = get_supabase_client()
     client.table(SUPABASE_TABLE).delete().gte("id", 0).execute()
     st.session_state.history = pd.DataFrame(columns=COLUMNS)
 
 
 # ====================================================================
-# 3. LOGIQUE DE CALCUL (money management 4% évolutif)
+# 3. LOGIQUE DE CALCUL (money management évolutif)
 # ====================================================================
 
-def compute_capital_final(c_start: float, wins: int, losses: int, payout_pct: float) -> float:
-    """Capital final après W gains et L pertes, mise 4% évolutive.
-
-    Comme chaque trade multiplie le capital par un facteur constant
-    (gain -> 1 + 0.04*payout ; perte -> 1 - 0.04), la multiplication
-    étant commutative, l'ORDRE des trades n'influence PAS le résultat
-    final : seul le nombre de gains/pertes compte.
-    """
+def compute_capital_final(c_start: float, wins: int, losses: int, payout_pct: float, mise_pct: float = 0.04) -> float:
+    """Capital final après W gains et L pertes, avec mise dynamique (défaut = 4%)."""
     payout = payout_pct / 100.0
-    facteur_gain = 1 + MISE_PCT * payout
-    facteur_perte = 1 - MISE_PCT
+    facteur_gain = 1 + mise_pct * payout
+    facteur_perte = 1 - mise_pct
     return c_start * (facteur_gain ** wins) * (facteur_perte ** losses)
 
 
-def solve_wins_from_capital(c_start: float, c_end: float, n_trades: int, payout_pct: float):
-    """Résout W (nombre de trades gagnants) par passage au log, à partir
-    de la relation :
-        C_end = C_start * (1 + 0.04*Payout)^W * (1 - 0.04)^(N-W)
-
-    Retourne (W arrondi et borné dans [0, N], W brut avant arrondi).
-    """
+def solve_wins_from_capital(c_start: float, c_end: float, n_trades: int, payout_pct: float, mise_pct: float = 0.04):
+    """Résout W par passage au log avec pourcentage de mise dynamique."""
     if c_start <= 0 or c_end <= 0 or n_trades <= 0:
         raise ValueError("Capital initial, capital final et nombre de trades doivent être > 0.")
 
     payout = payout_pct / 100.0
-    facteur_gain = 1 + MISE_PCT * payout
-    facteur_perte = 1 - MISE_PCT
+    facteur_gain = 1 + mise_pct * payout
+    facteur_perte = 1 - mise_pct
 
     if facteur_gain == facteur_perte:
         raise ValueError("Payout invalide : impossible de distinguer gains et pertes.")
@@ -176,23 +150,18 @@ def solve_wins_from_capital(c_start: float, c_end: float, n_trades: int, payout_
     w_brut = numerateur / denominateur
 
     w_arrondi = int(round(w_brut))
-    w_arrondi = max(0, min(n_trades, w_arrondi))  # borne dans [0, N]
+    w_arrondi = max(0, min(n_trades, w_arrondi))
 
     return w_arrondi, w_brut
 
 
-def simulate_session_step_by_step(c_start: float, resultats: list, payout_pct: float) -> pd.DataFrame:
-    """Simule une session trade par trade (utilisé par l'onglet Simulateur).
-
-    resultats : liste de bool (True = gagné, False = perdu), dans l'ordre.
-    Retourne un DataFrame détaillé avec la mise et le capital après
-    chaque trade.
-    """
+def simulate_session_step_by_step(c_start: float, resultats: list, payout_pct: float, mise_pct: float = 0.04) -> pd.DataFrame:
+    """Simule une session trade par trade avec mise dynamique."""
     payout = payout_pct / 100.0
     capital = c_start
     lignes = []
     for i, gagne in enumerate(resultats, start=1):
-        mise = MISE_PCT * capital
+        mise = mise_pct * capital
         if gagne:
             gain = mise * payout
             capital_apres = capital + gain
@@ -205,7 +174,7 @@ def simulate_session_step_by_step(c_start: float, resultats: list, payout_pct: f
         lignes.append({
             "Trade #": i,
             "Capital avant ($)": round(capital, 2),
-            "Mise (4%) ($)": round(mise, 2),
+            f"Mise ({round(mise_pct*100, 1)}%) ($)": round(mise, 2),
             "Résultat": resultat_txt,
             "Variation ($)": round(variation, 2),
             "Capital après ($)": round(capital_apres, 2),
@@ -216,8 +185,7 @@ def simulate_session_step_by_step(c_start: float, resultats: list, payout_pct: f
 
 def build_session_row(date_val, mode: str, c_start: float, c_end: float,
                        n_trades: int, wins: int, losses: int, payout_pct: float) -> dict:
-    """Construit le dictionnaire d'une ligne d'historique à partir des
-    valeurs calculées, avec Win Rate, Profit Net et Rendement %."""
+    """Construit le dictionnaire d'une ligne d'historique."""
     win_rate = (wins / n_trades * 100) if n_trades > 0 else 0.0
     profit_net = c_end - c_start
     rendement = (profit_net / c_start * 100) if c_start > 0 else 0.0
@@ -247,7 +215,7 @@ if "confirm_reset" not in st.session_state:
     st.session_state.confirm_reset = False
 
 if "prefill" not in st.session_state:
-    st.session_state.prefill = None  # utilisé par le Simulateur -> Nouvelle Session
+    st.session_state.prefill = None
 
 
 # ====================================================================
@@ -256,7 +224,7 @@ if "prefill" not in st.session_state:
 
 with st.sidebar:
     st.title("📈 Carnet de Trading")
-    st.caption("Money management 4% évolutif — 100% local")
+    st.caption("Money management évolutif — Cloud Supabase")
 
     df_hist = st.session_state.history
     if not df_hist.empty:
@@ -268,6 +236,22 @@ with st.sidebar:
         st.caption(f"{len(df_hist)} session(s) enregistrée(s)")
     else:
         st.info("Aucune session enregistrée pour le moment.")
+
+    st.divider()
+    
+    # --- RÈGLAGE DU RISQUE DYNAMIQUE ---
+    st.subheader("⚙️ Configuration du Risque")
+    mise_pct_input = st.number_input(
+        "Pourcentage de mise par trade (%)",
+        min_value=1.0,
+        max_value=50.0,
+        value=4.0,
+        step=0.5,
+        help="Détermine le % du capital disponible misé à chaque trade.",
+        key="sidebar_mise_pct"
+    )
+    # Conversion en décimal pour les calculs (ex: 4% -> 0.04)
+    mise_pct = mise_pct_input / 100.0
 
     st.divider()
     st.caption("☁️ Données stockées sur Supabase (cloud)")
@@ -294,7 +278,6 @@ with tab_dashboard:
         df = df.copy()
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-        # ---- KPI cards ----
         capital_actuel = df.iloc[-1]["Capital_Final"]
         capital_depart = df.iloc[0]["Capital_Initial"]
         rendement_total = (capital_actuel - capital_depart) / capital_depart * 100 if capital_depart else 0
@@ -310,7 +293,6 @@ with tab_dashboard:
 
         st.divider()
 
-        # ---- Graphiques ----
         g1, g2 = st.columns(2)
 
         with g1:
@@ -358,7 +340,6 @@ with tab_dashboard:
 
         st.divider()
 
-        # ---- Tableau récapitulatif ----
         st.subheader("📋 Historique des sessions")
         df_display = df.copy()
         df_display["Date"] = df_display["Date"].dt.strftime("%Y-%m-%d")
@@ -380,6 +361,7 @@ with tab_dashboard:
 # --------------------------------------------------------------------
 with tab_new:
     st.subheader("Enregistrer une nouvelle session")
+    st.info(f"⚙️ Taux de mise actuellement configuré : **{mise_pct_input}%** (modifiable dans la barre latérale)")
 
     mode_choice = st.radio(
         "Mode de saisie",
@@ -387,7 +369,7 @@ with tab_new:
         horizontal=False,
     )
 
-    prefill = st.session_state.prefill  # valeurs pré-remplies depuis le Simulateur, si présentes
+    prefill = st.session_state.prefill
 
     # ================= MODE A =================
     if mode_choice.startswith("Mode A"):
@@ -410,9 +392,9 @@ with tab_new:
 
         if submit_a:
             try:
-                w_est, w_brut = solve_wins_from_capital(c_start_a, c_end_a, int(n_a), payout_a)
+                w_est, w_brut = solve_wins_from_capital(c_start_a, c_end_a, int(n_a), payout_a, mise_pct)
                 l_est = int(n_a) - w_est
-                capital_theorique = compute_capital_final(c_start_a, w_est, l_est, payout_a)
+                capital_theorique = compute_capital_final(c_start_a, w_est, l_est, payout_a, mise_pct)
                 erreur_pct = abs(capital_theorique - c_end_a) / c_end_a * 100
 
                 st.session_state["mode_a_result"] = {
@@ -449,7 +431,7 @@ with tab_new:
                 )
                 append_session(row)
                 st.session_state["mode_a_result"] = None
-                st.success("Session enregistrée dans `journal_trading.csv` ✅")
+                st.success("Session enregistrée sur Supabase ✅")
                 st.rerun()
 
     # ================= MODE B =================
@@ -481,7 +463,7 @@ with tab_new:
                 st.error("Il faut au moins un trade (gagné ou perdu).")
                 st.session_state["mode_b_result"] = None
             else:
-                c_end_b = compute_capital_final(c_start_b, int(wins_b), int(losses_b), payout_b)
+                c_end_b = compute_capital_final(c_start_b, int(wins_b), int(losses_b), payout_b, mise_pct)
                 st.session_state["mode_b_result"] = {
                     "date": date_b, "c_start": c_start_b, "c_end": c_end_b,
                     "n": n_b, "payout": payout_b, "w": int(wins_b), "l": int(losses_b),
@@ -503,7 +485,7 @@ with tab_new:
                 append_session(row)
                 st.session_state["mode_b_result"] = None
                 st.session_state.prefill = None
-                st.success("Session enregistrée dans `journal_trading.csv` ✅")
+                st.success("Session enregistrée sur Supabase ✅")
                 st.rerun()
 
 # --------------------------------------------------------------------
@@ -512,24 +494,27 @@ with tab_new:
 with tab_sim:
     st.subheader("🧪 Simulateur de session (avant exécution réelle)")
     st.caption(
-        "Teste l'impact théorique d'une session (ex : 5 trades, mise 4% évolutive, payout 85%) "
-        "sans rien enregistrer. Tu peux ensuite transférer le résultat vers une nouvelle session réelle."
+        "Teste l'impact théorique d'une session sans rien enregistrer. "
+        "Tu peux ajuster le pourcentage de mise pour voir comment le capital évolue."
     )
 
     df_current = st.session_state.history
     capital_defaut = float(df_current.iloc[-1]["Capital_Final"]) if not df_current.empty else 1000.0
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         c_start_sim = st.number_input("Capital de départ ($)", min_value=0.01, value=capital_defaut, step=10.0, key="sim_cstart")
     with col2:
         n_sim = st.slider("Nombre de trades à simuler", min_value=1, max_value=30, value=5, key="sim_n")
     with col3:
         payout_sim = st.number_input("Payout (%)", min_value=1.0, max_value=500.0, value=85.0, step=1.0, key="sim_payout")
+    with col4:
+        mise_sim_input = st.number_input("Mise par trade (%)", min_value=1.0, max_value=50.0, value=mise_pct_input, step=0.5, key="sim_mise")
+
+    mise_sim = mise_sim_input / 100.0
 
     win_rate_cible = st.slider("Win rate cible pour pré-remplir la séquence (%)", 0, 100, 60, key="sim_wr")
 
-    # Pré-remplissage de la séquence selon le win rate cible
     nb_wins_defaut = int(round(n_sim * win_rate_cible / 100))
     sequence_defaut = ["✅ Gagné"] * nb_wins_defaut + ["❌ Perdu"] * (n_sim - nb_wins_defaut)
 
@@ -554,10 +539,10 @@ with tab_sim:
 
     if st.button("▶️ Lancer la simulation", type="primary", use_container_width=True):
         resultats_bool = [r == "✅ Gagné" for r in df_seq_edited["Résultat"]]
-        df_sim = simulate_session_step_by_step(c_start_sim, resultats_bool, payout_sim)
+        df_sim = simulate_session_step_by_step(c_start_sim, resultats_bool, payout_sim, mise_sim)
         st.session_state["sim_result_df"] = df_sim
         st.session_state["sim_result_meta"] = {
-            "c_start": c_start_sim, "payout": payout_sim,
+            "c_start": c_start_sim, "payout": payout_sim, "mise_pct": mise_sim,
             "w": sum(resultats_bool), "l": len(resultats_bool) - sum(resultats_bool),
             "n": len(resultats_bool),
         }
@@ -568,9 +553,8 @@ with tab_sim:
         c_end_sim = df_sim.iloc[-1]["Capital après ($)"]
         profit_sim = c_end_sim - meta["c_start"]
 
-        # Cas de référence : tout gagné / tout perdu
-        best_case = compute_capital_final(meta["c_start"], meta["n"], 0, meta["payout"])
-        worst_case = compute_capital_final(meta["c_start"], 0, meta["n"], meta["payout"])
+        best_case = compute_capital_final(meta["c_start"], meta["n"], 0, meta["payout"], meta["mise_pct"])
+        worst_case = compute_capital_final(meta["c_start"], 0, meta["n"], meta["payout"], meta["mise_pct"])
 
         st.divider()
         cA, cB, cC, cD = st.columns(4)
@@ -601,7 +585,7 @@ with tab_sim:
 # --------------------------------------------------------------------
 with tab_data:
     st.subheader("🛠️ Gestion des données")
-    st.caption("Toutes les données sont stockées dans ta base Supabase (cloud) — elles survivent aux mises en veille et aux redéploiements de l'appli.")
+    st.caption("Toutes les données sont stockées dans ta base Supabase (cloud).")
 
     df_data = st.session_state.history
 
