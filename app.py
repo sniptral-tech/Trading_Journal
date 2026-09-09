@@ -3,8 +3,8 @@
  CARNET DE TRADING INTERACTIF - Streamlit
 ====================================================================
 Application de suivi de sessions de trading (money management
-évolutif avec pourcentage de mise dynamique), avec sauvegarde persistante 
-sur une base Supabase (Postgres gratuit).
+évolutif avec pourcentage de mise dynamique dans chaque formulaire),
+avec sauvegarde persistante sur une base Supabase (Postgres gratuit).
 
 Configuration requise avant lancement :
   - Un projet Supabase avec la table créée via supabase_setup.sql
@@ -13,6 +13,13 @@ Configuration requise avant lancement :
         [supabase]
         url = "https://xxxxx.supabase.co"
         key = "eyJ...."   # clé "anon public"
+
+  ⚠️ SÉCURITÉ : vérifie les policies RLS (Row Level Security) de ta
+  table "sessions" sur Supabase. Avec la clé "anon public", si les
+  policies sont trop permissives, n'importe qui connaissant l'URL de
+  l'appli pourrait insérer ou supprimer des données (le bouton
+  "Réinitialiser la base" fait un DELETE complet). Restreins l'accès
+  en écriture si l'appli est déployée publiquement.
 
 Lancement :
     pip install -r requirements.txt
@@ -39,8 +46,106 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# ====================================================================
+# STYLISATION CSS SUR-MESURE (DESIGN PREMIUM DARK)
+# ====================================================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
 
-# Colonnes de l'historique (ordre = ordre d'affichage dans le tableau)
+    /* Typographie globale */
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+    }
+
+    /* Arrière-plan général */
+    .stApp {
+        background: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #0f172a 100%) !important;
+        color: #f3f4f6 !important;
+    }
+
+    /* Barre latérale (Sidebar) */
+    section[data-testid="stSidebar"] {
+        background-color: #080d16 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    /* Cartes Métriques (Glassmorphism) */
+    [data-testid="stMetric"] {
+        background: rgba(17, 24, 39, 0.7) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 16px !important;
+        padding: 16px 20px !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 26px !important;
+        font-weight: 800 !important;
+        background: linear-gradient(90deg, #38bdf8, #818cf8) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+    }
+
+    /* Boutons Principaux */
+    .stButton > button {
+        background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 12px 24px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.3px !important;
+        box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35) !important;
+        transition: all 0.3s ease-in-out !important;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(124, 58, 237, 0.55) !important;
+        color: #ffffff !important;
+    }
+
+    /* Champs de formulaire (Inputs / Select) */
+    .stTextInput input, .stNumberInput input, .stDateInput input, div[data-baseweb="select"] {
+        background-color: rgba(15, 23, 42, 0.8) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 10px !important;
+        color: #f8fafc !important;
+    }
+
+    .stTextInput input:focus, .stNumberInput input:focus {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.3) !important;
+    }
+
+    /* Onglets (Tabs) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px !important;
+        background-color: rgba(15, 23, 42, 0.5) !important;
+        padding: 6px !important;
+        border-radius: 12px !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        color: #94a3b8 !important;
+        font-weight: 600 !important;
+        border: none !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: #1e293b !important;
+        color: #38bdf8 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Colonnes de l'historique
 COLUMNS = [
     "ID",
     "Date",
@@ -55,10 +160,8 @@ COLUMNS = [
     "Profit_Net",
     "Rendement_Pct",
 ]
-
-
 # ====================================================================
-# 2. PERSISTANCE CLOUD (Supabase — base Postgres gratuite)
+# 2. PERSISTANCE CLOUD (Supabase)
 # ====================================================================
 
 SUPABASE_TABLE = "sessions"
@@ -106,27 +209,37 @@ def load_history() -> pd.DataFrame:
         return pd.DataFrame(columns=COLUMNS)
 
 
-def append_session(row: dict) -> None:
-    """Ajoute une session dans Supabase."""
-    client = get_supabase_client()
-    db_row = {COL_TO_DB[k]: v for k, v in row.items() if k in COL_TO_DB}
-    client.table(SUPABASE_TABLE).insert(db_row).execute()
-    st.session_state.history = load_history()
+def append_session(row: dict) -> bool:
+    """Ajoute une session dans Supabase. Retourne True si l'opération a réussi."""
+    try:
+        client = get_supabase_client()
+        db_row = {COL_TO_DB[k]: v for k, v in row.items() if k in COL_TO_DB}
+        client.table(SUPABASE_TABLE).insert(db_row).execute()
+        st.session_state.history = load_history()
+        return True
+    except Exception as e:
+        st.error(f"⚠️ Échec de l'enregistrement sur Supabase : {e}")
+        return False
 
 
-def reset_history() -> None:
-    """Supprime définitivement toutes les sessions enregistrées."""
-    client = get_supabase_client()
-    client.table(SUPABASE_TABLE).delete().gte("id", 0).execute()
-    st.session_state.history = pd.DataFrame(columns=COLUMNS)
+def reset_history() -> bool:
+    """Supprime définitivement toutes les sessions enregistrées. Retourne True si succès."""
+    try:
+        client = get_supabase_client()
+        client.table(SUPABASE_TABLE).delete().gte("id", 0).execute()
+        st.session_state.history = pd.DataFrame(columns=COLUMNS)
+        return True
+    except Exception as e:
+        st.error(f"⚠️ Échec de la réinitialisation sur Supabase : {e}")
+        return False
 
 
 # ====================================================================
-# 3. LOGIQUE DE CALCUL (money management évolutif)
+# 3. LOGIQUE DE CALCUL (Money Management Dynamique)
 # ====================================================================
 
 def compute_capital_final(c_start: float, wins: int, losses: int, payout_pct: float, mise_pct: float = 0.04) -> float:
-    """Capital final après W gains et L pertes, avec mise dynamique (défaut = 4%)."""
+    """Capital final après W gains et L pertes, selon le % de mise saisi."""
     payout = payout_pct / 100.0
     facteur_gain = 1 + mise_pct * payout
     facteur_perte = 1 - mise_pct
@@ -134,7 +247,7 @@ def compute_capital_final(c_start: float, wins: int, losses: int, payout_pct: fl
 
 
 def solve_wins_from_capital(c_start: float, c_end: float, n_trades: int, payout_pct: float, mise_pct: float = 0.04):
-    """Résout W par passage au log avec pourcentage de mise dynamique."""
+    """Résout W par passage au log selon le % de mise saisi."""
     if c_start <= 0 or c_end <= 0 or n_trades <= 0:
         raise ValueError("Capital initial, capital final et nombre de trades doivent être > 0.")
 
@@ -156,7 +269,7 @@ def solve_wins_from_capital(c_start: float, c_end: float, n_trades: int, payout_
 
 
 def simulate_session_step_by_step(c_start: float, resultats: list, payout_pct: float, mise_pct: float = 0.04) -> pd.DataFrame:
-    """Simule une session trade par trade avec mise dynamique."""
+    """Simule une session trade par trade selon le % de mise saisi."""
     payout = payout_pct / 100.0
     capital = c_start
     lignes = []
@@ -217,6 +330,13 @@ if "confirm_reset" not in st.session_state:
 if "prefill" not in st.session_state:
     st.session_state.prefill = None
 
+# Compteur utilisé pour forcer Streamlit à régénérer les widgets du
+# formulaire Mode B avec de nouvelles valeurs par défaut quand un
+# transfert depuis le Simulateur a lieu (sans ça, Streamlit garde la
+# valeur déjà affichée à l'écran et ignore le nouveau "value=").
+if "prefill_version" not in st.session_state:
+    st.session_state.prefill_version = 0
+
 
 # ====================================================================
 # 5. SIDEBAR
@@ -236,22 +356,6 @@ with st.sidebar:
         st.caption(f"{len(df_hist)} session(s) enregistrée(s)")
     else:
         st.info("Aucune session enregistrée pour le moment.")
-
-    st.divider()
-    
-    # --- RÈGLAGE DU RISQUE DYNAMIQUE ---
-    st.subheader("⚙️ Configuration du Risque")
-    mise_pct_input = st.number_input(
-        "Pourcentage de mise par trade (%)",
-        min_value=1.0,
-        max_value=50.0,
-        value=4.0,
-        step=0.5,
-        help="Détermine le % du capital disponible misé à chaque trade.",
-        key="sidebar_mise_pct"
-    )
-    # Conversion en décimal pour les calculs (ex: 4% -> 0.04)
-    mise_pct = mise_pct_input / 100.0
 
     st.divider()
     st.caption("☁️ Données stockées sur Supabase (cloud)")
@@ -361,7 +465,6 @@ with tab_dashboard:
 # --------------------------------------------------------------------
 with tab_new:
     st.subheader("Enregistrer une nouvelle session")
-    st.info(f"⚙️ Taux de mise actuellement configuré : **{mise_pct_input}%** (modifiable dans la barre latérale)")
 
     mode_choice = st.radio(
         "Mode de saisie",
@@ -370,12 +473,13 @@ with tab_new:
     )
 
     prefill = st.session_state.prefill
+    pv = st.session_state.prefill_version  # suffixe de clé pour forcer le refresh
 
     # ================= MODE A =================
     if mode_choice.startswith("Mode A"):
         st.caption(
             "Renseigne le capital de départ, le capital final observé, le nombre total de "
-            "trades et le payout. L'application retrouve automatiquement le nombre de trades "
+            "trades, le pourcentage de mise et le payout. L'application retrouve automatiquement le nombre de trades "
             "gagnés (W) et perdus (L) qui expliquent ce résultat."
         )
         with st.form("form_mode_a"):
@@ -385,6 +489,7 @@ with tab_new:
                 c_start_a = st.number_input("Capital Initial ($)", min_value=0.01, value=1000.0, step=10.0)
                 n_a = st.number_input("Nombre total de trades (N)", min_value=1, value=20, step=1)
             with col2:
+                mise_a_pct = st.number_input("Mise par trade (%)", min_value=1.0, max_value=50.0, value=4.0, step=0.5)
                 c_end_a = st.number_input("Capital Final ($)", min_value=0.01, value=1100.0, step=10.0)
                 payout_a = st.number_input("Payout (%)", min_value=1.0, max_value=500.0, value=85.0, step=1.0)
 
@@ -392,9 +497,10 @@ with tab_new:
 
         if submit_a:
             try:
-                w_est, w_brut = solve_wins_from_capital(c_start_a, c_end_a, int(n_a), payout_a, mise_pct)
+                mise_a = mise_a_pct / 100.0
+                w_est, w_brut = solve_wins_from_capital(c_start_a, c_end_a, int(n_a), payout_a, mise_a)
                 l_est = int(n_a) - w_est
-                capital_theorique = compute_capital_final(c_start_a, w_est, l_est, payout_a, mise_pct)
+                capital_theorique = compute_capital_final(c_start_a, w_est, l_est, payout_a, mise_a)
                 erreur_pct = abs(capital_theorique - c_end_a) / c_end_a * 100
 
                 st.session_state["mode_a_result"] = {
@@ -429,31 +535,36 @@ with tab_new:
                     res_a["date"], "Mode A (auto)", res_a["c_start"], res_a["c_end"],
                     res_a["n"], res_a["w"], res_a["l"], res_a["payout"],
                 )
-                append_session(row)
-                st.session_state["mode_a_result"] = None
-                st.success("Session enregistrée sur Supabase ✅")
-                st.rerun()
+                if append_session(row):
+                    st.session_state["mode_a_result"] = None
+                    st.success("Session enregistrée sur Supabase ✅")
+                    st.rerun()
 
     # ================= MODE B =================
     else:
         st.caption(
-            "Renseigne le capital de départ ainsi que le nombre exact de trades gagnés (ITM) "
-            "et perdus (OTM). Le payout est nécessaire pour calculer le capital final résultant."
+            "Renseigne le capital de départ, le nombre exact de trades gagnés (ITM) et perdus (OTM), "
+            "ainsi que le pourcentage de mise par trade et le payout."
         )
         default_c_start = prefill["c_start"] if prefill else 1000.0
         default_w = prefill["w"] if prefill else 10
         default_l = prefill["l"] if prefill else 5
         default_payout = prefill["payout"] if prefill else 85.0
 
+        # Les `key` intègrent `pv` (prefill_version) : quand un transfert
+        # depuis le Simulateur arrive, `pv` change et Streamlit recrée ces
+        # widgets avec les nouvelles valeurs par défaut au lieu de garder
+        # ce qui était déjà affiché à l'écran.
         with st.form("form_mode_b"):
             col1, col2 = st.columns(2)
             with col1:
                 date_b = st.date_input("Date de la session", value=date.today(), key="date_b")
-                c_start_b = st.number_input("Capital Initial ($)", min_value=0.01, value=float(default_c_start), step=10.0)
-                wins_b = st.number_input("Trades Gagnés (ITM)", min_value=0, value=int(default_w), step=1)
+                c_start_b = st.number_input("Capital Initial ($)", min_value=0.01, value=float(default_c_start), step=10.0, key=f"c_start_b_{pv}")
+                wins_b = st.number_input("Trades Gagnés (ITM)", min_value=0, value=int(default_w), step=1, key=f"wins_b_{pv}")
             with col2:
-                payout_b = st.number_input("Payout (%)", min_value=1.0, max_value=500.0, value=float(default_payout), step=1.0)
-                losses_b = st.number_input("Trades Perdus (OTM)", min_value=0, value=int(default_l), step=1)
+                mise_b_pct = st.number_input("Mise par trade (%)", min_value=1.0, max_value=50.0, value=4.0, step=0.5, key="mise_b_pct")
+                payout_b = st.number_input("Payout (%)", min_value=1.0, max_value=500.0, value=float(default_payout), step=1.0, key=f"payout_b_{pv}")
+                losses_b = st.number_input("Trades Perdus (OTM)", min_value=0, value=int(default_l), step=1, key=f"losses_b_{pv}")
 
             submit_b = st.form_submit_button("🔎 Calculer le Capital Final", use_container_width=True)
 
@@ -463,7 +574,8 @@ with tab_new:
                 st.error("Il faut au moins un trade (gagné ou perdu).")
                 st.session_state["mode_b_result"] = None
             else:
-                c_end_b = compute_capital_final(c_start_b, int(wins_b), int(losses_b), payout_b, mise_pct)
+                mise_b = mise_b_pct / 100.0
+                c_end_b = compute_capital_final(c_start_b, int(wins_b), int(losses_b), payout_b, mise_b)
                 st.session_state["mode_b_result"] = {
                     "date": date_b, "c_start": c_start_b, "c_end": c_end_b,
                     "n": n_b, "payout": payout_b, "w": int(wins_b), "l": int(losses_b),
@@ -482,11 +594,11 @@ with tab_new:
                     res_b["date"], "Mode B (manuel)", res_b["c_start"], res_b["c_end"],
                     res_b["n"], res_b["w"], res_b["l"], res_b["payout"],
                 )
-                append_session(row)
-                st.session_state["mode_b_result"] = None
-                st.session_state.prefill = None
-                st.success("Session enregistrée sur Supabase ✅")
-                st.rerun()
+                if append_session(row):
+                    st.session_state["mode_b_result"] = None
+                    st.session_state.prefill = None
+                    st.success("Session enregistrée sur Supabase ✅")
+                    st.rerun()
 
 # --------------------------------------------------------------------
 # ONGLET 3 : SIMULATEUR
@@ -495,7 +607,7 @@ with tab_sim:
     st.subheader("🧪 Simulateur de session (avant exécution réelle)")
     st.caption(
         "Teste l'impact théorique d'une session sans rien enregistrer. "
-        "Tu peux ajuster le pourcentage de mise pour voir comment le capital évolue."
+        "Ajuste le pourcentage de mise pour observer l'évolution de ton capital."
     )
 
     df_current = st.session_state.history
@@ -507,9 +619,9 @@ with tab_sim:
     with col2:
         n_sim = st.slider("Nombre de trades à simuler", min_value=1, max_value=30, value=5, key="sim_n")
     with col3:
-        payout_sim = st.number_input("Payout (%)", min_value=1.0, max_value=500.0, value=85.0, step=1.0, key="sim_payout")
+        mise_sim_input = st.number_input("Mise par trade (%)", min_value=1.0, max_value=50.0, value=4.0, step=0.5, key="sim_mise")
     with col4:
-        mise_sim_input = st.number_input("Mise par trade (%)", min_value=1.0, max_value=50.0, value=mise_pct_input, step=0.5, key="sim_mise")
+        payout_sim = st.number_input("Payout (%)", min_value=1.0, max_value=500.0, value=85.0, step=1.0, key="sim_payout")
 
     mise_sim = mise_sim_input / 100.0
 
@@ -578,6 +690,7 @@ with tab_sim:
             st.session_state.prefill = {
                 "c_start": meta["c_start"], "w": meta["w"], "l": meta["l"], "payout": meta["payout"],
             }
+            st.session_state.prefill_version += 1  # force le refresh des champs du Mode B
             st.success("Valeurs transférées ! Va dans l'onglet **➕ Nouvelle Session** (Mode B) pour finaliser l'enregistrement.")
 
 # --------------------------------------------------------------------
@@ -618,10 +731,10 @@ with tab_data:
             cconf1, cconf2 = st.columns(2)
             with cconf1:
                 if st.button("✅ Oui, tout supprimer", type="primary", use_container_width=True):
-                    reset_history()
-                    st.session_state.confirm_reset = False
-                    st.success("Historique réinitialisé sur Supabase.")
-                    st.rerun()
+                    if reset_history():
+                        st.session_state.confirm_reset = False
+                        st.success("Historique réinitialisé sur Supabase.")
+                        st.rerun()
             with cconf2:
                 if st.button("❌ Annuler", use_container_width=True):
                     st.session_state.confirm_reset = False
