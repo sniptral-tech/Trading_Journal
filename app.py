@@ -300,7 +300,8 @@ with tab_dashboard:
         c1.metric("💰 Capital Actuel Total", f"{capital_actuel:,.2f} $")
         c2.metric("📊 Rendement Total", f"{rendement_total:+.2f} %")
         c3.metric("🎯 Win Rate Global", f"{win_rate_global:.2f} %")
-        c4.metric("🏆 Meilleure / 📉 Pire session", f"{meilleure_session:+,.2f} $  /  {pire_session:+,.2f} $")
+        c4.metric("🏆 Meilleure / 📉 Pire session", f"{meilleure_session} $ / {pire_session} $")
+
 
         st.divider()
 
