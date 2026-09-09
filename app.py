@@ -8,11 +8,21 @@ avec sauvegarde persistante sur une base Supabase (Postgres gratuit).
 
 Configuration requise avant lancement :
   - Un projet Supabase avec la table créée via supabase_setup.sql
-  - Un fichier .streamlit/secrets.toml (en local) ou les "Secrets"
-    de l'appli (sur Streamlit Cloud) contenant :
-        [supabase]
-        url = "https://xxxxx.supabase.co"
-        key = "eyJ...."   # clé "anon public"
+  - Les identifiants Supabase, fournis d'une des deux façons selon
+    l'hébergeur (le code essaie st.secrets en premier, puis se
+    rabat automatiquement sur les variables d'environnement) :
+
+      • Streamlit Cloud : fichier .streamlit/secrets.toml (en local)
+        ou section "Secrets" de l'appli, contenant :
+            [supabase]
+            url = "https://xxxxx.supabase.co"
+            key = "eyJ...."   # clé "anon public"
+
+      • Render (ou tout autre hébergeur sans st.secrets) :
+        variables d'environnement, à ajouter dans
+        Dashboard → Environment Variables :
+            SUPABASE_URL = https://xxxxx.supabase.co
+            SUPABASE_KEY = eyJ....   # clé "anon public"
 
   ⚠️ SÉCURITÉ : vérifie les policies RLS (Row Level Security) de ta
   table "sessions" sur Supabase. Avec la clé "anon public", si les
@@ -20,6 +30,9 @@ Configuration requise avant lancement :
   l'appli pourrait insérer ou supprimer des données (le bouton
   "Réinitialiser la base" fait un DELETE complet). Restreins l'accès
   en écriture si l'appli est déployée publiquement.
+  Ne commite JAMAIS un fichier secrets.toml contenant de vraies
+  valeurs dans un dépôt public — utilise les variables d'environnement
+  de l'hébergeur à la place.
 
 Lancement :
     pip install -r requirements.txt
@@ -27,6 +40,7 @@ Lancement :
 ====================================================================
 """
 
+import os
 from datetime import date
 
 import numpy as np
@@ -92,9 +106,34 @@ DB_TO_COL["id"] = "ID"
 
 @st.cache_resource
 def get_supabase_client() -> "Client":
-    """Crée le client Supabase une seule fois par session."""
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
+    """Crée le client Supabase une seule fois par session.
+
+    Essaie d'abord st.secrets (Streamlit Cloud). Si ce n'est pas
+    disponible ou incomplet, se rabat sur les variables
+    d'environnement SUPABASE_URL / SUPABASE_KEY (Render, Docker,
+    etc.).
+    """
+    url = None
+    key = None
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+    except Exception:
+        pass
+
+    if not url or not key:
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_KEY")
+
+    if not url or not key:
+        st.error(
+            "⚠️ Identifiants Supabase introuvables. Configure soit "
+            "st.secrets['supabase']['url']/['key'] (Streamlit Cloud), "
+            "soit les variables d'environnement SUPABASE_URL et "
+            "SUPABASE_KEY (Render)."
+        )
+        st.stop()
+
     return create_client(url, key)
 
 
@@ -683,4 +722,3 @@ with tab_data:
         st.info("Aucune session enregistrée.")
     else:
         st.dataframe(df_data, use_container_width=True, hide_index=True)
-     
