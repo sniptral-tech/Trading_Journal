@@ -683,3 +683,4 @@ with tab_data:
         st.info("Aucune session enregistrée.")
     else:
         st.dataframe(df_data, use_container_width=True, hide_index=True)
+     
