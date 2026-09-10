@@ -1,156 +1,150 @@
-# ====================================================================
-# STYLISATION CSS SUR-MESURE (DESIGN PREMIUM DARK)
-# ====================================================================
+/* ================================================================
+   CARNET DE TRADING — Thème visuel personnalisé
+   Palette : navy profond + accent ambre (valeur / monnaie)
+   Police  : Space Grotesk (titres, chiffres) + Inter (texte courant)
+   ================================================================ */
 
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
-    /* Typographie globale */
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
-    }
+:root {
+  --bg: #0B1220;
+  --bg-elevated: #131B2E;
+  --bg-elevated-2: #1B2540;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #EDEFF4;
+  --text-muted: #8C94A8;
+  --accent: #E8AF4E;
+  --accent-strong: #F4C46B;
+  --accent-text: #1A1204;
+  --success: #34D399;
+  --danger: #F0576B;
+}
 
-    /* Arrière-plan général */
-    .stApp {
-        background: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #0f172a 100%) !important;
-        color: #f3f4f6 !important;
-    }
+/* ---------- Base ---------- */
+.stApp {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+}
 
-    /* Barre supérieure Streamlit : transparente pour prolonger le dégradé
-       (sinon une bande blanche reste visible en haut de la page) */
-    [data-testid="stHeader"] {
-        background: transparent !important;
-    }
+h1, h2, h3,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
 
-    /* Titres et libellés : texte clair et lisible sur fond sombre.
-       Ciblé sur les conteneurs markdown/légendes/labels plutôt que sur
-       p/span/label en général, pour ne pas écraser le texte blanc des
-       boutons (qui vit dans son propre <p> à l'intérieur de <button>). */
-    h1, h2, h3, h4, h5, h6, label,
-    [data-testid="stMarkdownContainer"] p,
-    [data-testid="stMarkdownContainer"] li,
-    [data-testid="stMetricLabel"],
-    [data-testid="stCaptionContainer"] {
-        color: #e5e7eb !important;
-    }
+/* ---------- Nettoyage du chrome Streamlit ---------- */
+footer { visibility: hidden; }
+#MainMenu { visibility: hidden; }
+[data-testid="stHeader"] {
+  background: var(--bg);
+  box-shadow: none;
+}
 
-    h1, h2, h3 {
-        font-weight: 800 !important;
-        letter-spacing: -0.4px !important;
-    }
+/* ---------- Sidebar ---------- */
+[data-testid="stSidebar"] {
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+}
+[data-testid="stSidebar"] h1 {
+  color: var(--accent);
+  font-size: 1.4rem;
+}
 
-    /* Barre latérale (Sidebar) */
-    section[data-testid="stSidebar"] {
-        background-color: #080d16 !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
+/* ---------- Onglets façon "segmented control" ---------- */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+  border: 1px solid var(--border);
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+  display: none; /* remplacé par le fond plein sur l'onglet actif ci-dessus */
+}
+[data-testid="stTabs"] [data-baseweb="tab-border"] {
+  display: none;
+}
 
-    /* Cartes Métriques (Glassmorphism) */
-    [data-testid="stMetric"] {
-        background: rgba(17, 24, 39, 0.7) !important;
-        backdrop-filter: blur(12px) !important;
-        -webkit-backdrop-filter: blur(12px) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 16px !important;
-        padding: 16px 20px !important;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4) !important;
-    }
+/* ---------- Boutons ---------- */
+.stButton button,
+.stDownloadButton button,
+.stFormSubmitButton button {
+  border-radius: 999px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  border: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+[data-testid="baseButton-primary"],
+[data-testid="baseButton-primaryFormSubmit"] {
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: var(--accent-text);
+}
+[data-testid="baseButton-secondary"],
+[data-testid="baseButton-secondaryFormSubmit"] {
+  background: var(--bg-elevated-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.stButton button:hover,
+.stDownloadButton button:hover,
+.stFormSubmitButton button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(232, 175, 78, 0.25);
+}
 
-    [data-testid="stMetricValue"] {
-        font-size: 26px !important;
-        font-weight: 800 !important;
-        background: linear-gradient(90deg, #38bdf8, #818cf8) !important;
-        -webkit-background-clip: text !important;
-        -webkit-text-fill-color: transparent !important;
-    }
+/* ---------- Metrics (st.metric) ---------- */
+[data-testid="stMetric"] {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+[data-testid="stMetricLabel"] {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+[data-testid="stMetricValue"] {
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--accent);
+  font-weight: 700;
+}
 
-    /* Boutons Principaux */
-    .stButton > button {
-        background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%) !important;
-        color: #ffffff !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 12px 24px !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.3px !important;
-        box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35) !important;
-        transition: all 0.3s ease-in-out !important;
-    }
+/* ---------- Champs de saisie ---------- */
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-testid="stTextInput"] input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+}
 
-    .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 25px rgba(124, 58, 237, 0.55) !important;
-        color: #ffffff !important;
-    }
+/* ---------- Alertes (succès / info / avertissement / erreur) ---------- */
+[data-testid="stAlert"] {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
 
-    /* Champs de formulaire (Inputs / Select) */
-    .stTextInput input, .stNumberInput input, .stDateInput input, div[data-baseweb="select"] {
-        background-color: rgba(15, 23, 42, 0.8) !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        border-radius: 10px !important;
-        color: #f8fafc !important;
-    }
+/* ---------- Tableaux ---------- */
+[data-testid="stDataFrame"] {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
 
-    .stTextInput input:focus, .stNumberInput input:focus {
-        border-color: #38bdf8 !important;
-        box-shadow: 0 0 10px rgba(56, 189, 248, 0.3) !important;
-    }
-
-    /* Conteneur des formulaires (st.form) : sans ça, un cadre gris clair
-       par défaut de Streamlit tranche mal avec le fond sombre */
-    [data-testid="stForm"] {
-        background: rgba(15, 23, 42, 0.45) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 18px !important;
-        padding: 22px !important;
-    }
-
-    /* Messages d'alerte (st.info / st.success / st.warning / st.error) */
-    [data-testid="stAlert"] {
-        background: rgba(17, 24, 39, 0.75) !important;
-        backdrop-filter: blur(8px) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    }
-
-    /* Tableaux (st.dataframe / st.data_editor) */
-    [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
-        border-radius: 14px !important;
-        overflow: hidden !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    }
-
-    /* Curseurs (st.slider) */
-    [data-testid="stSlider"] [role="slider"] {
-        background-color: #818cf8 !important;
-        box-shadow: 0 0 0 5px rgba(129, 140, 248, 0.2) !important;
-    }
-
-    /* Onglets (Tabs) */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px !important;
-        background-color: rgba(15, 23, 42, 0.5) !important;
-        padding: 6px !important;
-        border-radius: 12px !important;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600 !important;
-        border: none !important;
-        transition: color 0.2s ease-in-out !important;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background-color: #1e293b !important;
-        color: #38bdf8 !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-    }
-
-    /* Ascenseur (scrollbar) discret et assorti au thème */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #0b0f19; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #475569; }
-</style>
+/* ---------- Séparateurs ---------- */
+hr { border-color: var(--border); }
