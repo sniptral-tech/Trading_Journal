@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 from supabase import create_client, Client
 
@@ -264,6 +265,36 @@ def build_session_row(date_val, mode: str, c_start: float, c_end: float,
 
 
 # ====================================================================
+# 3bis. CONVERTISSEUR DE DEVISES (USD -> Franc CFA / XOF)
+# ====================================================================
+
+XOF_PAR_EUR = 655.957  # parité fixe Franc CFA (UEMOA) / Euro, inchangée depuis 1999
+
+
+@st.cache_data(ttl=3600)
+def get_taux_usd_vers_xof():
+    """Récupère le taux USD -> XOF (Franc CFA).
+
+    Le XOF est indexé sur l'euro à un taux fixe (655.957 XOF = 1 EUR).
+    On récupère donc le taux de marché USD -> EUR (API Frankfurter,
+    gratuite, sans clé, données Banque Centrale Européenne) et on
+    applique la parité fixe pour obtenir USD -> XOF.
+    Retourne None si la requête échoue (pas de connexion, API indisponible).
+    """
+    try:
+        resp = requests.get(
+            "https://api.frankfurter.app/latest",
+            params={"from": "USD", "to": "EUR"},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        usd_vers_eur = resp.json()["rates"]["EUR"]
+        return usd_vers_eur * XOF_PAR_EUR
+    except Exception:
+        return None
+
+
+# ====================================================================
 # 4. INITIALISATION DU SESSION STATE
 # ====================================================================
 
@@ -312,8 +343,8 @@ with st.sidebar:
 # 6. ONGLETS PRINCIPAUX
 # ====================================================================
 
-tab_dashboard, tab_new, tab_sim, tab_data = st.tabs(
-    ["🏠 Dashboard", "➕ Nouvelle Session", "🧪 Simulateur", "🛠️ Gestion des données"]
+tab_dashboard, tab_new, tab_sim, tab_convert, tab_data = st.tabs(
+    ["🏠 Dashboard", "➕ Nouvelle Session", "🧪 Simulateur", "💱 Convertisseur", "🛠️ Gestion des données"]
 )
 
 # --------------------------------------------------------------------
@@ -670,7 +701,55 @@ with tab_sim:
             st.success("Valeurs transférées ! Va dans l'onglet **➕ Nouvelle Session** (Mode B) pour finaliser l'enregistrement.")
 
 # --------------------------------------------------------------------
-# ONGLET 4 : GESTION DES DONNÉES
+# ONGLET 4 : CONVERTISSEUR USD -> FRANC CFA (XOF)
+# --------------------------------------------------------------------
+with tab_convert:
+    st.subheader("💱 Convertisseur $ → Franc CFA (XOF)")
+    st.caption(
+        "Le Franc CFA (Côte d'Ivoire, zone UEMOA) est indexé sur l'euro à un "
+        "taux fixe (1 € = 655,957 FCFA). Le taux $ → FCFA suit donc le taux "
+        "$ → € du marché, récupéré automatiquement ci-dessous."
+    )
+
+    taux_auto = get_taux_usd_vers_xof()
+    if taux_auto:
+        st.success(f"✅ Taux récupéré automatiquement : 1 $ ≈ {taux_auto:,.2f} FCFA")
+        taux_defaut = round(taux_auto, 2)
+    else:
+        st.warning(
+            "⚠️ Impossible de récupérer le taux en direct pour le moment. "
+            "Saisis-le manuellement ci-dessous (vérifiable sur Google : \"1 USD en FCFA\")."
+        )
+        taux_defaut = 600.0
+
+    taux_manuel = st.number_input(
+        "Taux de change utilisé (1 $ = ... FCFA)",
+        min_value=1.0,
+        value=float(taux_defaut),
+        step=0.5,
+        help="Pré-rempli avec le taux du marché. Modifie-le si tu veux utiliser un autre taux.",
+    )
+
+    st.divider()
+
+    col_usd, col_fcfa = st.columns(2)
+    with col_usd:
+        montant_usd = st.number_input("Montant en dollars ($)", min_value=0.0, value=1000.0, step=10.0, key="conv_usd")
+        st.metric("Équivalent en FCFA", f"{montant_usd * taux_manuel:,.0f} FCFA")
+    with col_fcfa:
+        montant_fcfa = st.number_input("Montant en FCFA", min_value=0.0, value=655000.0, step=1000.0, key="conv_fcfa")
+        st.metric("Équivalent en dollars ($)", f"{montant_fcfa / taux_manuel:,.2f} $")
+
+    if not st.session_state.history.empty:
+        st.divider()
+        capital_actuel_usd = st.session_state.history.iloc[-1]["Capital_Final"]
+        st.info(
+            f"📊 Ton capital actuel (**{capital_actuel_usd:,.2f} $**) équivaut à environ "
+            f"**{capital_actuel_usd * taux_manuel:,.0f} FCFA**"
+        )
+
+# --------------------------------------------------------------------
+# ONGLET 5 : GESTION DES DONNÉES
 # --------------------------------------------------------------------
 with tab_data:
     st.subheader("🛠️ Gestion des données")
