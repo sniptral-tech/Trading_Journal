@@ -384,7 +384,7 @@ with tab_dashboard:
             df_bar["Couleur"] = np.where(df_bar["Profit_Net"] >= 0, "Gain", "Perte")
             fig_bar = px.bar(
                 df_bar, x="Session", y="Profit_Net", color="Couleur",
-                color_discrete_map={"Gain": "#22c55e", "Perte": "#ef4444"},
+                color_discrete_map={"Gain": "#34D399", "Perte": "#F0576B"},
                 labels={"Profit_Net": "Profit net ($)"},
                 text_auto=".2f",
                 template="plotly_dark",
@@ -392,7 +392,7 @@ with tab_dashboard:
             fig_bar.update_layout(
                 showlegend=False, margin=dict(t=10, b=10),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e5e7eb"),
+                font=dict(color="#C9CEDC"),
             )
             fig_bar.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
             fig_bar.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
@@ -406,15 +406,15 @@ with tab_dashboard:
                 names=["Gagnés", "Perdus"],
                 values=[total_gagnes, total_perdus],
                 color=["Gagnés", "Perdus"],
-                color_discrete_map={"Gagnés": "#22c55e", "Perdus": "#ef4444"},
+                color_discrete_map={"Gagnés": "#34D399", "Perdus": "#F0576B"},
                 hole=0.45,
                 template="plotly_dark",
             )
             fig_pie.update_layout(
                 margin=dict(t=10, b=10),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e5e7eb"),
-                legend=dict(font=dict(color="#e5e7eb")),
+                font=dict(color="#C9CEDC"),
+                legend=dict(font=dict(color="#C9CEDC")),
             )
             st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -425,16 +425,16 @@ with tab_dashboard:
         fig_line.add_trace(go.Scatter(
             x=df_line["Session"], y=df_line["Capital_Final"],
             mode="lines+markers", name="Capital final",
-            line=dict(color="#38bdf8", width=3),
-            marker=dict(size=7, color="#818cf8", line=dict(width=1, color="#0b0f19")),
-            fill="tozeroy", fillcolor="rgba(56, 189, 248, 0.08)",
+            line=dict(color="#E8AF4E", width=3),
+            marker=dict(size=7, color="#F4C46B", line=dict(width=1, color="#0B1220")),
+            fill="tozeroy", fillcolor="rgba(232, 175, 78, 0.10)",
         ))
         fig_line.update_layout(
             template="plotly_dark",
             xaxis_title="Session", yaxis_title="Capital ($)",
             margin=dict(t=10, b=10),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#e5e7eb"),
+            font=dict(color="#C9CEDC"),
         )
         fig_line.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
         fig_line.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
@@ -677,15 +677,15 @@ with tab_sim:
         fig_sim.add_trace(go.Scatter(
             x=df_sim["Trade #"], y=df_sim["Capital après ($)"],
             mode="lines+markers", name="Capital",
-            line=dict(color="#a855f7", width=3),
-            marker=dict(size=7, color="#c4b5fd", line=dict(width=1, color="#0b0f19")),
-            fill="tozeroy", fillcolor="rgba(168, 85, 247, 0.08)",
+            line=dict(color="#7C93FF", width=3),
+            marker=dict(size=7, color="#B4C2FF", line=dict(width=1, color="#0B1220")),
+            fill="tozeroy", fillcolor="rgba(124, 147, 255, 0.10)",
         ))
         fig_sim.update_layout(
             template="plotly_dark",
             xaxis_title="Trade #", yaxis_title="Capital ($)", margin=dict(t=10, b=10),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#e5e7eb"),
+            font=dict(color="#C9CEDC"),
         )
         fig_sim.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
         fig_sim.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
